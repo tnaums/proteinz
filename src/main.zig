@@ -31,7 +31,7 @@ pub fn main() !void {
     defer sequence.deinit(gpa);
     
     // Open the file with error checking.
-    if (std.Io.Dir.cwd().openFile(io, "sequences/mature.pep", .{
+    if (std.Io.Dir.cwd().openFile(io, "sequences/mature.fa", .{
         .mode = .read_only,
         .lock = .exclusive
     })) |file| {
