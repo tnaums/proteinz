@@ -1,6 +1,7 @@
 const std = @import("std");
 const assert = std.debug.assert;
 const Protein = @import("protein.zig").Protein;
+const AutoHashMap = std.hash_map.AutoHashMap;
 
 pub fn main(init: std.process.Init) !void {
     // Set up allocator.
@@ -47,4 +48,6 @@ pub fn main(init: std.process.Init) !void {
     // Create a Protein
     const myProtein: Protein = Protein.init(header, sequence.items);
     std.debug.print("Protein object is: {any}\n", .{myProtein});
+
+
 }
