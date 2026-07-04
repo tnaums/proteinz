@@ -1,4 +1,12 @@
 const std = @import("std");
+const expect = std.testing.expect;
+
+test "testing Protein creation" {
+    const header: []const u8 = ">fake_protein|Escherichia_graminicola";
+    const sequence: []const u8 = "APAEECSSTKTSPAKSGNSPVPKTFGLVALRSASPIHFTHFSATENGFLLGLPADKQNAT";
+    const p: Protein = Protein.init(header, sequence);
+    try expect(p.sequence.len == 60);
+}
 
 pub const Protein = struct {
     header: []const u8,
