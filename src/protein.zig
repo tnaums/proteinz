@@ -37,7 +37,7 @@ pub const Protein = struct {
                 'V' => { mass += 99.13211; },
                 'W' => { mass += 186.21220; },
                 'Y' => { mass += 163.17512; },
-                else => { unreachable; },
+                else => { return 0.0; }, // if non-standard aa found, return zero
             }
         }
         return mass / 1000;
