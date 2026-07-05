@@ -3,6 +3,8 @@ const assert = std.debug.assert;
 const Protein = @import("protein.zig").Protein;
 const AutoHashMap = std.hash_map.AutoHashMap;
 
+const arguments = enum { repl, command };
+
 pub fn main(init: std.process.Init) !void {
     // Set up allocator.
     const gpa = init.gpa;
@@ -20,13 +22,27 @@ pub fn main(init: std.process.Init) !void {
     }
     std.debug.print("\n\n", .{});
 
-    // I need to create an enum and switch on that!
-    // But this works for starters.
+    // Use enum and args[1] to decide what to do.
     if (args.len > 1) {
-        if (std.mem.eql(u8, args[1], "repl")) {
-            std.debug.print("You requested a repl!\n", .{});
+        const command = std.meta.stringToEnum(arguments, args[1]) orelse {
+//            std.debug.print("Invalid argument choice.\n", .{});
+            return error.InvalidChoice;
+        };
+        switch (command) {
+            .repl => std.debug.print("You requested a repl!\n", .{}),
+            .command => std.debug.print("You requested a command interface!\n", .{}),
         }
     }
+
+
+    //     switch (args[1]) {
+    //         arguments.repl => std.debug.print("You requested a repl!\n", .{}),
+    //         arguments.command => std.debug.print("You requested a command interface!\n", .{}),
+    //         else => std.debug.print("Command not recognized\n", .{}),
+    //     } 
+    // } else {
+    //     std.debug.print("You did not provide a command.\n", .{});
+    // }
     
     var header: []u8 = undefined;
     var sequence: std.ArrayList(u8) = .empty;
