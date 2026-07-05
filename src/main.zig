@@ -5,16 +5,29 @@ const AutoHashMap = std.hash_map.AutoHashMap;
 
 pub fn main(init: std.process.Init) !void {
     // Set up allocator.
-//    var debug_allocator: std.heap.DebugAllocator(.{}) = .init;
-//    defer assert(debug_allocator.deinit() == .ok);
-    //    const gpa = debug_allocator.allocator();
     const gpa = init.gpa;
-
-    // Set up our I/O implementation.
-    // var threaded: std.Io.Threaded = .init(gpa, .{});
-    // defer threaded.deinit();
-    // const io = threaded.io();
+    // Set up I/O implementation.
     const io = init.io;
+
+    // Access CLI arguments
+    const args = try init.minimal.args.toSlice(
+        init.arena.allocator()
+    );
+
+    // looping over cli arguments, just for fun
+    for (args, 0..) |arg, idx| {
+        std.debug.print("{d}: {s}\n", .{ idx, arg });
+    }
+    std.debug.print("\n\n", .{});
+
+    // I need to create an enum and switch on that!
+    // But this works for starters.
+    if (args.len > 1) {
+        if (std.mem.eql(u8, args[1], "repl")) {
+            std.debug.print("You requested a repl!\n", .{});
+        }
+    }
+    
     var header: []u8 = undefined;
     var sequence: std.ArrayList(u8) = .empty;
     defer sequence.deinit(gpa);
