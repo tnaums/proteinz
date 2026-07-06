@@ -1,6 +1,7 @@
 const std = @import("std");
 const assert = std.debug.assert;
 const Protein = @import("protein.zig").Protein;
+const REPL = @import("repl.zig");
 const AutoHashMap = std.hash_map.AutoHashMap;
 
 const arguments = enum { repl, command };
@@ -34,16 +35,6 @@ pub fn main(init: std.process.Init) !void {
         }
     }
 
-
-    //     switch (args[1]) {
-    //         arguments.repl => std.debug.print("You requested a repl!\n", .{}),
-    //         arguments.command => std.debug.print("You requested a command interface!\n", .{}),
-    //         else => std.debug.print("Command not recognized\n", .{}),
-    //     } 
-    // } else {
-    //     std.debug.print("You did not provide a command.\n", .{});
-    // }
-    
     var header: []u8 = undefined;
     var sequence: std.ArrayList(u8) = .empty;
     defer sequence.deinit(gpa);
@@ -78,5 +69,11 @@ pub fn main(init: std.process.Init) !void {
     const myProtein: Protein = Protein.init(header, sequence.items);
     std.debug.print("Protein object is: {any}\n", .{myProtein});
 
+    // test repl
+    while (true) {
+        REPL.userInput(io) catch {
+            std.debug.print("The input line was too long.\n", .{});
+        };
+    }
 
 }
