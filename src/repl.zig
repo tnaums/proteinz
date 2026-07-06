@@ -13,10 +13,24 @@ pub fn userInput(io: Io) !void {
     // Print the prompt.
     try stdout.print("\nproteinz > ", .{});
 
-    // Get a line of input. Returns both error union and optional
+    // Get a line of input. Function returns both error union and optional
     const line_input = try stdin.takeDelimiter('\n') orelse "default";
 
     // Print it back out.
-    try stdout.print("input line: {s}", .{line_input});
-    
+    try stdout.print("input line: {s}\n", .{line_input});
+
+    // parse into words
+    cleanInput(line_input);
+}
+
+fn cleanInput(line_input: []const u8) void {
+    const whitespace = " \t\n\r";
+    const trimmed = std.mem.trim(u8, line_input, whitespace);
+    var it = std.mem.splitScalar(u8, trimmed, ' ');
+    while (it.next()) |part| {
+        if (part.len > 0) {
+            std.debug.print("Part: {s}\n", .{part});
+            std.debug.print("length: {d}\n", .{part.len});
+        }
+    }
 }

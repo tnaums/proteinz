@@ -26,7 +26,6 @@ pub fn main(init: std.process.Init) !void {
     // Use enum and args[1] to decide what to do.
     if (args.len > 1) {
         const command = std.meta.stringToEnum(arguments, args[1]) orelse {
-//            std.debug.print("Invalid argument choice.\n", .{});
             return error.InvalidChoice;
         };
         switch (command) {
@@ -61,7 +60,6 @@ pub fn main(init: std.process.Init) !void {
     // Print some stuff
     std.debug.print("Header: {s}\n", .{header});
     std.debug.print("Sequence: {s}\n", .{sequence.items});
-    std.debug.print("Type: {s}\n", .{@typeName(@TypeOf(sequence.items))});
     std.debug.print("Sequence length is: {d}\n", .{sequence.items.len});
     std.debug.print("Buffer capacity is: {d}\n", .{sequence.capacity});
 
