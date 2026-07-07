@@ -13,9 +13,7 @@ pub fn main(init: std.process.Init) !void {
     const io = init.io;
     std.debug.print("Type of gpa: {}\n", .{@TypeOf(gpa)});
     // Access CLI arguments
-    const args = try init.minimal.args.toSlice(
-        init.arena.allocator()
-    );
+    const args = try init.minimal.args.toSlice(init.arena.allocator());
 
     // looping over cli arguments, just for fun
     for (args, 0..) |arg, idx| {
@@ -64,7 +62,8 @@ pub fn main(init: std.process.Init) !void {
     std.debug.print("Buffer capacity is: {d}\n", .{sequence.capacity});
 
     // Create a Protein
-    const myProtein: Protein = Protein.init(header, sequence.items);
+    const myProtein: *Protein = try Protein.init(gpa, header, sequence.items);
+    defer myProtein.deinit(gpa);
     std.debug.print("Protein object is: {any}\n", .{myProtein});
 
     // test repl
@@ -73,5 +72,4 @@ pub fn main(init: std.process.Init) !void {
             std.debug.print("The input line was too long.\n", .{});
         };
     }
-
 }
