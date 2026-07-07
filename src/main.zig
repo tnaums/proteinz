@@ -11,7 +11,7 @@ pub fn main(init: std.process.Init) !void {
     const gpa = init.gpa;
     // Set up I/O implementation.
     const io = init.io;
-
+    std.debug.print("Type of gpa: {}\n", .{@TypeOf(gpa)});
     // Access CLI arguments
     const args = try init.minimal.args.toSlice(
         init.arena.allocator()
@@ -69,7 +69,7 @@ pub fn main(init: std.process.Init) !void {
 
     // test repl
     while (true) {
-        REPL.userInput(io) catch {
+        REPL.userInput(io, gpa) catch {
             std.debug.print("The input line was too long.\n", .{});
         };
     }
