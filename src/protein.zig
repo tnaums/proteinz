@@ -10,6 +10,56 @@ test "testing Protein creation" {
     try expect(p.sequence.len == 60);
 }
 
+// Comptime mapping of amino acids and masses
+const massMap = std.StaticStringMap(f32).initComptime([_]struct { []const u8, f32 }{
+    .{ "A", 71.07855 },  .{ "C", 103.14464 }, .{ "D", 115.08826 }, .{ "E", 129.11504 },
+    .{ "F", 147.17571 }, .{ "G", 57.05177 },  .{ "H", 137.14062 }, .{ "I", 113.15890 },
+    .{ "K", 128.17358 }, .{ "L", 113.15890 }, .{ "M", 131.19820 }, .{ "N", 114.10354 },
+    .{ "P", 97.11623 },  .{ "Q", 128.13032 }, .{ "R", 156.18707 }, .{ "S", 87.07796 },
+    .{ "T", 101.10474 }, .{ "V", 99.13211 },  .{ "W", 186.21220 }, .{ "Y", 163.17512 },
+});
+
+const AminoAcid = enum {
+    A, C, D, E,
+    F, G, H, I,
+    K, L, M, N,
+    P, Q, R, S,
+    T, V, W, Y,
+};
+
+const massMap2: std.EnumMap(AminoAcid, f32) = .init(.{
+    .A = 71.07855, .C = 103.14464, .D = 115.08826, .E = 129.11504,
+    .F = 147.17571, .G = 57.05177,  .H = 137.14062, .I = 113.15890,
+    .K = 128.17358, .L = 113.15890, .M = 131.19820, .N = 114.10354,
+    .P = 97.11623,  .Q = 128.13032, .R = 156.18707, .S = 87.07796,
+    .T = 101.10474, .V = 99.13211,  .W = 186.21220, .Y = 163.17512,
+});
+
+const massMap3 = blk: {
+    var map: [90]f32 = undefined; // 'Y' is 89
+    map['A'] = 71.07855;
+    map['C'] = 103.14464;
+    map['D'] = 115.08826;
+    map['E'] = 129.11504;
+    map['F'] = 147.17571;
+    map['G'] = 57.05177;
+    map['H'] = 137.14062;
+    map['I'] = 113.15890;
+    map['K'] = 128.17358;
+    map['L'] = 113.15890;
+    map['M'] = 131.19820;
+    map['N'] = 114.10354;
+    map['P'] = 97.11623;
+    map['Q'] = 128.13032;
+    map['R'] = 156.18707;
+    map['S'] = 87.07796;
+    map['T'] = 101.10474;
+    map['V'] = 99.13211;
+    map['W'] = 186.21220;
+    map['Y'] = 163.17512;
+    break :blk map;
+};
+
 pub const Protein = struct {
     header: []u8,
     sequence: []u8,
@@ -26,7 +76,7 @@ pub const Protein = struct {
         protein_ptr.sequence = try allocator.alloc(u8, sequence.len);
         @memcpy(protein_ptr.sequence, sequence);
         // Calculate and store mass
-        protein_ptr.mass = calculateMass(sequence);
+        protein_ptr.mass = calculateMass2(sequence);
         return protein_ptr;
     }
 
@@ -41,72 +91,25 @@ pub const Protein = struct {
     fn calculateMass(sequence: []const u8) f32 {
         var mass: f32 = 18.0;
         for (sequence) |aa| {
-            switch (aa) {
-                'A' => {
-                    mass += 71.07855;
-                },
-                'C' => {
-                    mass += 103.14464;
-                },
-                'D' => {
-                    mass += 115.08826;
-                },
-                'E' => {
-                    mass += 129.11504;
-                },
-                'F' => {
-                    mass += 147.17571;
-                },
-                'G' => {
-                    mass += 57.05177;
-                },
-                'H' => {
-                    mass += 137.14062;
-                },
-                'I' => {
-                    mass += 113.15890;
-                },
-                'K' => {
-                    mass += 128.17358;
-                },
-                'L' => {
-                    mass += 113.15890;
-                },
-                'M' => {
-                    mass += 131.19820;
-                },
-                'N' => {
-                    mass += 114.10354;
-                },
-                'P' => {
-                    mass += 97.11623;
-                },
-                'Q' => {
-                    mass += 128.13032;
-                },
-                'R' => {
-                    mass += 156.18707;
-                },
-                'S' => {
-                    mass += 87.07796;
-                },
-                'T' => {
-                    mass += 101.10474;
-                },
-                'V' => {
-                    mass += 99.13211;
-                },
-                'W' => {
-                    mass += 186.21220;
-                },
-                'Y' => {
-                    mass += 163.17512;
-                },
-                else => {
-                    return 0.0;
-                }, // if non-standard aa found, return zero
-            }
+            mass += massMap3[aa];
         }
+
         return mass / 1000;
     }
+
+        fn calculateMass2(sequence: []const u8) f32 {
+            var mass: f32 = 18.0;
+            for (sequence) |aa| {
+                const str = [_]u8{ aa };
+                const e = std.meta.stringToEnum(AminoAcid, &str);
+                if (e) |value| {
+                    mass += massMap2.get(value) orelse unreachable;
+                } 
+            }
+
+        return mass / 1000;
+    }
+
+    
+
 };
