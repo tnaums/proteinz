@@ -1,38 +1,61 @@
 const std = @import("std");
+const Io = std.Io;
 const expect = std.testing.expect;
 
 test "testing Protein creation" {
+    const io = std.testing.io;
     const allocator = std.testing.allocator;
-    const header: []const u8 = ">fake_protein|Escherichia_graminicola";
-    const sequence: []const u8 = "APAEECSSTKTSPAKSGNSPVPKTFGLVALRSASPIHFTHFSATENGFLLGLPADKQNAT";
-    const p: *Protein = try Protein.init(allocator, header, sequence);
+//    const header: []const u8 = ">fake_protein|Escherichia_graminicola";
+//    const sequence: []const u8 = "APAEECSSTKTSPAKSGNSPVPKTFGLVALRSASPIHFTHFSATENGFLLGLPADKQNAT";
+    const p: *Protein = try Protein.init(io, allocator, "sequences/mature.fa");
     defer p.deinit(allocator);
-    try expect(p.sequence.len == 60);
+    try expect(p.sequence.len == 189);
 }
 
-// Comptime mapping of amino acids and masses
-const massMap = std.StaticStringMap(f32).initComptime([_]struct { []const u8, f32 }{
-    .{ "A", 71.07855 },  .{ "C", 103.14464 }, .{ "D", 115.08826 }, .{ "E", 129.11504 },
-    .{ "F", 147.17571 }, .{ "G", 57.05177 },  .{ "H", 137.14062 }, .{ "I", 113.15890 },
-    .{ "K", 128.17358 }, .{ "L", 113.15890 }, .{ "M", 131.19820 }, .{ "N", 114.10354 },
-    .{ "P", 97.11623 },  .{ "Q", 128.13032 }, .{ "R", 156.18707 }, .{ "S", 87.07796 },
-    .{ "T", 101.10474 }, .{ "V", 99.13211 },  .{ "W", 186.21220 }, .{ "Y", 163.17512 },
-});
-
 const AminoAcid = enum {
-    A, C, D, E,
-    F, G, H, I,
-    K, L, M, N,
-    P, Q, R, S,
-    T, V, W, Y,
+    A,
+    C,
+    D,
+    E,
+    F,
+    G,
+    H,
+    I,
+    K,
+    L,
+    M,
+    N,
+    P,
+    Q,
+    R,
+    S,
+    T,
+    V,
+    W,
+    Y,
 };
 
 const massMap2: std.EnumMap(AminoAcid, f32) = .init(.{
-    .A = 71.07855, .C = 103.14464, .D = 115.08826, .E = 129.11504,
-    .F = 147.17571, .G = 57.05177,  .H = 137.14062, .I = 113.15890,
-    .K = 128.17358, .L = 113.15890, .M = 131.19820, .N = 114.10354,
-    .P = 97.11623,  .Q = 128.13032, .R = 156.18707, .S = 87.07796,
-    .T = 101.10474, .V = 99.13211,  .W = 186.21220, .Y = 163.17512,
+    .A = 71.07855,
+    .C = 103.14464,
+    .D = 115.08826,
+    .E = 129.11504,
+    .F = 147.17571,
+    .G = 57.05177,
+    .H = 137.14062,
+    .I = 113.15890,
+    .K = 128.17358,
+    .L = 113.15890,
+    .M = 131.19820,
+    .N = 114.10354,
+    .P = 97.11623,
+    .Q = 128.13032,
+    .R = 156.18707,
+    .S = 87.07796,
+    .T = 101.10474,
+    .V = 99.13211,
+    .W = 186.21220,
+    .Y = 163.17512,
 });
 
 const massMap3 = blk: {
@@ -65,7 +88,30 @@ pub const Protein = struct {
     sequence: []u8,
     mass: f32,
 
-    pub fn init(allocator: std.mem.Allocator, header: []const u8, sequence: []const u8) std.mem.Allocator.Error!*Protein {
+    pub fn init(io: Io, allocator: std.mem.Allocator, filename: []const u8) !*Protein {
+        var header: []u8 = undefined;
+        var sequence: std.ArrayList(u8) = .empty;
+        defer sequence.deinit(allocator);
+
+        // Open the file with error checking.
+        if (std.Io.Dir.cwd().openFile(io, filename, .{ .mode = .read_only, .lock = .exclusive })) |file| {
+            defer file.close(io);
+            var buf: [1024]u8 = undefined; // must be big enough for longest line
+            var reader: std.Io.File.Reader = file.reader(io, &buf);
+            while (try reader.interface.takeDelimiter('\n')) |line| {
+                if (line[0] == '>') {
+                    header = line;
+                } else {
+                    try sequence.appendSlice(allocator, line);
+                }
+            }
+        } else |err| switch (err) {
+            error.FileNotFound, error.AccessDenied => {
+                std.debug.print("unable to open file: {}\n", .{err});
+            },
+            else => |e| return e,
+        }
+
         // Allocate memory for the struct.
         const protein_ptr = try allocator.create(Protein);
         errdefer allocator.destroy(protein_ptr);
@@ -73,10 +119,10 @@ pub const Protein = struct {
         protein_ptr.header = try allocator.alloc(u8, header.len);
         @memcpy(protein_ptr.header, header);
         // Allocate memory for the sequence
-        protein_ptr.sequence = try allocator.alloc(u8, sequence.len);
-        @memcpy(protein_ptr.sequence, sequence);
+        protein_ptr.sequence = try allocator.alloc(u8, sequence.items.len);
+        @memcpy(protein_ptr.sequence, sequence.items);
         // Calculate and store mass
-        protein_ptr.mass = calculateMass2(sequence);
+        protein_ptr.mass = calculateMass2(sequence.items);
         return protein_ptr;
     }
 
@@ -97,19 +143,54 @@ pub const Protein = struct {
         return mass / 1000;
     }
 
-        fn calculateMass2(sequence: []const u8) f32 {
-            var mass: f32 = 18.0;
-            for (sequence) |aa| {
-                const str = [_]u8{ aa };
-                const e = std.meta.stringToEnum(AminoAcid, &str);
-                if (e) |value| {
-                    mass += massMap2.get(value) orelse unreachable;
-                } 
+    fn calculateMass2(sequence: []const u8) f32 {
+        var mass: f32 = 18.0;
+        for (sequence) |aa| {
+            const k = std.meta.stringToEnum(AminoAcid, &[_]u8{aa});
+            if (k) |key| {
+                mass += massMap2.get(key) orelse unreachable;
             }
+        }
 
         return mass / 1000;
     }
-
-    
-
 };
+
+// pub const Proteome = struct {
+//     headers: [][]const u8,
+//     sequences: [][]const u8,
+//     masses: [][]f32,
+
+//     pub fn init(io: Io, allocator: std.mem.Allocator, filename: []const u8) !Proteome {
+//         var header: []u8 = undefined;
+//         var sequence: std.ArrayList(u8) = .empty;
+//         defer sequence.deinit(allocator);
+
+//         // Open the file with error checking.
+//         if (std.Io.Dir.cwd().openFile(io, filename, .{ .mode = .read_only, .lock = .exclusive })) |file| {
+//             defer file.close(io);
+//             var buf: [1024]u8 = undefined; // must be big enough for longest line
+//             var reader: std.Io.File.Reader = file.reader(io, &buf);
+//             while (try reader.interface.takeDelimiter('\n')) |line| {
+//                 if (line[0] == '>') {
+//                     header = line;
+//                 } else {
+//                     try sequence.appendSlice(allocator, line);
+//                 }
+//             }
+//         } else |err| switch (err) {
+//             error.FileNotFound, error.AccessDenied => {
+//                 std.debug.print("unable to open file: {}\n", .{err});
+//             },
+//             else => |e| return e,
+//         }
+
+//         std.debug.print("Header: {s}\n", .{header});
+//         std.debug.print("Sequence: {s}\n", .{sequence});
+//         return Proteome{
+//             headers[0] = header,
+//             sequences[0] = sequence,
+//             masses[0] =
+//         };
+//     }
+// };
