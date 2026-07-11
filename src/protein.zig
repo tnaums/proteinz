@@ -83,6 +83,8 @@ const massMap3 = blk: {
     break :blk map;
 };
 
+pub const ProteinArray = std.MultiArrayList(Protein);
+
 pub const Protein = struct {
     header: []u8,
     sequence: []u8,
@@ -123,6 +125,17 @@ pub const Protein = struct {
         @memcpy(protein_ptr.sequence, sequence.items);
         // Calculate and store mass
         protein_ptr.mass = calculateMass2(sequence.items);
+
+        // trying out ProteinArray for creating proteome
+        var proteome = ProteinArray{};
+        defer proteome.deinit(allocator);
+        try proteome.append(allocator, .{
+            .header = header, .sequence = sequence.items, .mass = calculateMass2(sequence.items)
+        });
+        for (proteome.items(.header)) |*header2| {
+            std.debug.print("Header: {s}\n", .{header2.*});
+        }
+        
         return protein_ptr;
     }
 
@@ -156,41 +169,5 @@ pub const Protein = struct {
     }
 };
 
-// pub const Proteome = struct {
-//     headers: [][]const u8,
-//     sequences: [][]const u8,
-//     masses: [][]f32,
 
-//     pub fn init(io: Io, allocator: std.mem.Allocator, filename: []const u8) !Proteome {
-//         var header: []u8 = undefined;
-//         var sequence: std.ArrayList(u8) = .empty;
-//         defer sequence.deinit(allocator);
 
-//         // Open the file with error checking.
-//         if (std.Io.Dir.cwd().openFile(io, filename, .{ .mode = .read_only, .lock = .exclusive })) |file| {
-//             defer file.close(io);
-//             var buf: [1024]u8 = undefined; // must be big enough for longest line
-//             var reader: std.Io.File.Reader = file.reader(io, &buf);
-//             while (try reader.interface.takeDelimiter('\n')) |line| {
-//                 if (line[0] == '>') {
-//                     header = line;
-//                 } else {
-//                     try sequence.appendSlice(allocator, line);
-//                 }
-//             }
-//         } else |err| switch (err) {
-//             error.FileNotFound, error.AccessDenied => {
-//                 std.debug.print("unable to open file: {}\n", .{err});
-//             },
-//             else => |e| return e,
-//         }
-
-//         std.debug.print("Header: {s}\n", .{header});
-//         std.debug.print("Sequence: {s}\n", .{sequence});
-//         return Proteome{
-//             headers[0] = header,
-//             sequences[0] = sequence,
-//             masses[0] =
-//         };
-//     }
-// };
