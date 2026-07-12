@@ -90,30 +90,7 @@ pub const Protein = struct {
     sequence: []u8,
     mass: f32,
 
-    pub fn init(io: Io, allocator: std.mem.Allocator, filename: []const u8) !*Protein {
-        var header: []u8 = undefined;
-        var sequence: std.ArrayList(u8) = .empty;
-        defer sequence.deinit(allocator);
-
-        // Open the file with error checking.
-        if (std.Io.Dir.cwd().openFile(io, filename, .{ .mode = .read_only, .lock = .exclusive })) |file| {
-            defer file.close(io);
-            var buf: [1024]u8 = undefined; // must be big enough for longest line
-            var reader: std.Io.File.Reader = file.reader(io, &buf);
-            while (try reader.interface.takeDelimiter('\n')) |line| {
-                if (line[0] == '>') {
-                    header = line;
-                } else {
-                    try sequence.appendSlice(allocator, line);
-                }
-            }
-        } else |err| switch (err) {
-            error.FileNotFound, error.AccessDenied => {
-                std.debug.print("unable to open file: {}\n", .{err});
-            },
-            else => |e| return e,
-        }
-
+    pub fn init(allocator: std.mem.Allocator, header: []const u8, sequence: []const u8) !*Protein {
         // Allocate memory for the struct.
         const protein_ptr = try allocator.create(Protein);
         errdefer allocator.destroy(protein_ptr);
@@ -121,22 +98,23 @@ pub const Protein = struct {
         protein_ptr.header = try allocator.alloc(u8, header.len);
         @memcpy(protein_ptr.header, header);
         // Allocate memory for the sequence
-        protein_ptr.sequence = try allocator.alloc(u8, sequence.items.len);
-        @memcpy(protein_ptr.sequence, sequence.items);
+        protein_ptr.sequence = try allocator.alloc(u8, sequence.len);
+        @memcpy(protein_ptr.sequence, sequence);
         // Calculate and store mass
-        protein_ptr.mass = calculateMass2(sequence.items);
+        protein_ptr.mass = calculateMass2(sequence);
 
-        // trying out ProteinArray for creating proteome
-        var proteome = ProteinArray{};
-        defer proteome.deinit(allocator);
-        try proteome.append(allocator, .{
-            .header = header, .sequence = sequence.items, .mass = calculateMass2(sequence.items)
-        });
-        for (proteome.items(.header)) |*header2| {
-            std.debug.print("Header: {s}\n", .{header2.*});
-        }
-        
         return protein_ptr;
+        // // trying out ProteinArray for creating proteome
+        // var proteome = ProteinArray{};
+        // defer proteome.deinit(allocator);
+        // try proteome.append(allocator, .{
+        //     .header = header, .sequence = sequence.items, .mass = calculateMass2(sequence.items)
+        // });
+        // for (proteome.items(.header)) |*header2| {
+        //     std.debug.print("Header: {s}\n", .{header2.*});
+        // }
+        
+
     }
 
     pub fn deinit(self: *Protein, allocator: std.mem.Allocator) void {
@@ -169,5 +147,50 @@ pub const Protein = struct {
     }
 };
 
+pub fn proteinProducer(
+    io: Io,
+    allocator: std.mem.Allocator,
+    queue: *Io.Queue(Protein),
+    filename: []const u8,     
+) !void {
+        var header: []u8 = undefined;
+        var sequence: std.ArrayList(u8) = .empty;
+        defer sequence.deinit(allocator);
 
+        // Open the file with error checking.
+        if (std.Io.Dir.cwd().openFile(io, filename, .{ .mode = .read_only, .lock = .exclusive })) |file| {
+            defer file.close(io);
+            var buf: [1024]u8 = undefined; // must be big enough for longest line
+            var reader: std.Io.File.Reader = file.reader(io, &buf);
+            var startFlag: bool = true;
+            while (try reader.interface.takeDelimiter('\n')) |line| {
+                if (line[0] == '>') {
+                    if (!startFlag) {
+                        const p: *Protein = try .init(allocator, header, sequence.items);
+                        try queue.putOne(io, p.*);
+                        header = "";
+                        sequence.clearRetainingCapacity();
+                    } else { startFlag = false; }
+                    header = line;
+                } else {
+                    try sequence.appendSlice(allocator, line);
+                }
+            }
+        } else |err| switch (err) {
+            error.FileNotFound, error.AccessDenied => {
+                std.debug.print("unable to open file: {}\n", .{err});
+            },
+            else => |e| return e,
+        }
+    
+    const p: *Protein = try .init(allocator, header, sequence.items);
+    try queue.putOne(io, p.*);
+}
+
+pub fn proteinConsumer(
+    io: Io,
+    queue: *Io.Queue(Protein),
+) !Protein {
+    return queue.getOne(io);
+}
 
