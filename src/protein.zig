@@ -4,13 +4,12 @@ const expect = std.testing.expect;
 const Closed = Io.QueueClosedError.Closed;
 
 test "testing Protein creation" {
-    const io = std.testing.io;
     const allocator = std.testing.allocator;
-    //    const header: []const u8 = ">fake_protein|Escherichia_graminicola";
-    //    const sequence: []const u8 = "APAEECSSTKTSPAKSGNSPVPKTFGLVALRSASPIHFTHFSATENGFLLGLPADKQNAT";
-    const p: *Protein = try Protein.init(io, allocator, "sequences/mature.fa");
+    const header: []const u8 = ">fake_protein|Escherichia_graminicola";
+    const sequence: []const u8 = "APAEECSSTKTSPAKSGNSPVPKTFGLVALRSASPIHFTHFSATENGFLLGLPADKQNAT";
+    const p: *Protein = try Protein.init(allocator, header, sequence);
     defer p.deinit(allocator);
-    try expect(p.sequence.len == 189);
+    try expect(p.sequence.len == 60);
 }
 
 const AminoAcid = enum {
@@ -140,7 +139,7 @@ pub const Protein = struct {
         for (sequence) |aa| {
             const k = std.meta.stringToEnum(AminoAcid, &[_]u8{aa});
             if (k) |key| {
-                mass += massMap2.get(key);// orelse unreachable;
+                mass += massMap2.get(key); // orelse unreachable;
             }
         }
 
@@ -154,28 +153,29 @@ pub fn proteinProducer(
     queue: *Io.Queue(Protein),
     filename: []const u8,
 ) !void {
-    var header: []u8 = undefined;
+    var header: std.ArrayList(u8) = .empty;
+    defer header.deinit(allocator);
     var sequence: std.ArrayList(u8) = .empty;
     defer sequence.deinit(allocator);
     var startFlag: bool = true;
-    defer queue.close(io);    
+    defer queue.close(io);
 
     // Open the file with error checking.
     if (std.Io.Dir.cwd().openFile(io, filename, .{ .mode = .read_only, .lock = .exclusive })) |file| {
         defer file.close(io);
-        var buf: [1024]u8 = undefined; // must be big enough for longest line
+        var buf: [100]u8 = undefined; // must be big enough for longest line
         var reader: std.Io.File.Reader = file.reader(io, &buf);
+        // Fasta parser, puting each Protein struct into the queue
         while (try reader.interface.takeDelimiter('\n')) |line| {
+            if (line.len == 0) { continue; }
             if (line[0] == '>') {
                 if (!startFlag) {
-                    // make protein
-                    const p: *Protein = try .init(allocator, header, sequence.items);
-                    // put in queue
+                    const p: *Protein = try .init(allocator, header.items, sequence.items);
                     try queue.putOne(io, p.*);
-                    // reset sequence
-                    sequence.clearRetainingCapacity();                    
+                    sequence.clearRetainingCapacity();
+                    header.clearRetainingCapacity();
                 }
-                header = line;
+                try header.appendSlice(allocator, line);
                 startFlag = false;
             } else {
                 try sequence.appendSlice(allocator, line);
@@ -188,11 +188,9 @@ pub fn proteinProducer(
         else => |e| return e,
     }
 
-    const p: *Protein = try .init(allocator, header, sequence.items);
+    const p: *Protein = try .init(allocator, header.items, sequence.items);
     try queue.putOne(io, p.*);
 
-    // Signal that we're done sending.
-//    queue.close(io);    
 }
 
 pub fn proteinConsumer(
@@ -204,14 +202,3 @@ pub fn proteinConsumer(
     };
     return value;
 }
-
-// pub fn proteinConsumer(
-//     io: Io,
-//     queue: *Io.Queue(Protein),
-// ) !Protein {
-//     const value = queue.getOne(io) catch |err| switch (err) {
-//         error.Closed => return err,
-//         error.Canceled => return err,
-//         };
-//     return value;
-// }

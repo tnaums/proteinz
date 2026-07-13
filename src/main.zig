@@ -1,31 +1,28 @@
 const std = @import("std");
 const Io = std.Io;
-const assert = std.debug.assert;
 const Protein = @import("protein.zig").Protein;
 const proteinProducer = @import("protein.zig").proteinProducer;
 const proteinConsumer = @import("protein.zig").proteinConsumer;
 const REPL = @import("repl.zig");
-const AutoHashMap = std.hash_map.AutoHashMap;
 const Closed = Io.QueueClosedError.Closed;
 
 pub fn main(init: std.process.Init) !void {
-    // Set up allocator.
     const gpa = init.gpa;
-    // Set up I/O implementation.
     const io = init.io;
-    // Access CLI arguments
     const args = try init.minimal.args.toSlice(init.arena.allocator());
+
     var filename: []const u8 = "sequences/mature.fa"; // set a default
+
     // Check for args[1] and assign filename
     if (args.len > 1) {
         filename = args[1];
     } else {
-        std.debug.print("No file argument given...\nUsing default file.\n", .{});
+        std.debug.print("No file argument given...\nUsing default file {s}.\n", .{filename});
     }
 
     // Create Protein queue
     var queue: Io.Queue(Protein) = .init(&.{});
-    // Call proteinProducer
+    // Start proteinProducer
     var producer_task = try io.concurrent(proteinProducer, .{
         io, gpa, &queue, filename,
     });
@@ -35,15 +32,17 @@ pub fn main(init: std.process.Init) !void {
     defer myProtein.deinit(gpa);
 
     while (true) {
-    var consumer_task = try io.concurrent(proteinConsumer, .{ io, &queue });
-    defer _ = consumer_task.cancel(io) catch {};
+        var consumer_task = try io.concurrent(proteinConsumer, .{ io, &queue });
+        defer _ = consumer_task.cancel(io) catch {};
         if (consumer_task.await(io)) |p| {
             myProtein = p;
-    } else |err| {
-        std.debug.print("an error was returned: {any}\n", .{err});
-        break;
+        } else |err| {
+            std.debug.print("Found {any}\n", .{err});
+            break;
         }
-        std.debug.print("protein: {any}\n\n\n", .{myProtein});        
+        std.debug.print("protein: {s}\n", .{myProtein.header});
+        std.debug.print("sequence: {s}\n", .{myProtein.sequence});
+        std.debug.print("mass: {d}\n", .{myProtein.mass});
     }
 
     // test repl
