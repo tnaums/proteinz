@@ -6,6 +6,7 @@ const proteinProducer = @import("protein.zig").proteinProducer;
 const proteinConsumer = @import("protein.zig").proteinConsumer;
 const REPL = @import("repl.zig");
 const AutoHashMap = std.hash_map.AutoHashMap;
+const Closed = Io.QueueClosedError.Closed;
 
 pub fn main(init: std.process.Init) !void {
     // Set up allocator.
@@ -30,16 +31,20 @@ pub fn main(init: std.process.Init) !void {
     });
     defer producer_task.cancel(io) catch {};
 
-    // Retrieve protein from the queue
-    // Call proteinConsumer
-    var consumer_task = try io.concurrent(proteinConsumer, .{ io, &queue });
-    defer _ = consumer_task.cancel(io) catch {};
-    var myProtein = try consumer_task.await(io);
+    var myProtein: Protein = undefined;
     defer myProtein.deinit(gpa);
 
-    // Print stuff
-    std.debug.print("Protein object is: {any}\n", .{myProtein});
-    std.debug.print("Length is: {d}\n", .{myProtein.sequence.len});
+    while (true) {
+    var consumer_task = try io.concurrent(proteinConsumer, .{ io, &queue });
+    defer _ = consumer_task.cancel(io) catch {};
+        if (consumer_task.await(io)) |p| {
+            myProtein = p;
+    } else |err| {
+        std.debug.print("an error was returned: {any}\n", .{err});
+        break;
+        }
+        std.debug.print("protein: {any}\n\n\n", .{myProtein});        
+    }
 
     // test repl
     while (true) {

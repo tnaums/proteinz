@@ -1,12 +1,13 @@
 const std = @import("std");
 const Io = std.Io;
 const expect = std.testing.expect;
+const Closed = Io.QueueClosedError.Closed;
 
 test "testing Protein creation" {
     const io = std.testing.io;
     const allocator = std.testing.allocator;
-//    const header: []const u8 = ">fake_protein|Escherichia_graminicola";
-//    const sequence: []const u8 = "APAEECSSTKTSPAKSGNSPVPKTFGLVALRSASPIHFTHFSATENGFLLGLPADKQNAT";
+    //    const header: []const u8 = ">fake_protein|Escherichia_graminicola";
+    //    const sequence: []const u8 = "APAEECSSTKTSPAKSGNSPVPKTFGLVALRSASPIHFTHFSATENGFLLGLPADKQNAT";
     const p: *Protein = try Protein.init(io, allocator, "sequences/mature.fa");
     defer p.deinit(allocator);
     try expect(p.sequence.len == 189);
@@ -35,7 +36,8 @@ const AminoAcid = enum {
     Y,
 };
 
-const massMap2: std.EnumMap(AminoAcid, f32) = .init(.{
+//const massMap2: std.EnumMap(AminoAcid, f32) = .init(.{
+const massMap2: std.EnumArray(AminoAcid, f32) = .init(.{
     .A = 71.07855,
     .C = 103.14464,
     .D = 115.08826,
@@ -113,7 +115,6 @@ pub const Protein = struct {
         // for (proteome.items(.header)) |*header2| {
         //     std.debug.print("Header: {s}\n", .{header2.*});
         // }
-        
 
     }
 
@@ -139,7 +140,7 @@ pub const Protein = struct {
         for (sequence) |aa| {
             const k = std.meta.stringToEnum(AminoAcid, &[_]u8{aa});
             if (k) |key| {
-                mass += massMap2.get(key) orelse unreachable;
+                mass += massMap2.get(key);// orelse unreachable;
             }
         }
 
@@ -151,46 +152,66 @@ pub fn proteinProducer(
     io: Io,
     allocator: std.mem.Allocator,
     queue: *Io.Queue(Protein),
-    filename: []const u8,     
+    filename: []const u8,
 ) !void {
-        var header: []u8 = undefined;
-        var sequence: std.ArrayList(u8) = .empty;
-        defer sequence.deinit(allocator);
+    var header: []u8 = undefined;
+    var sequence: std.ArrayList(u8) = .empty;
+    defer sequence.deinit(allocator);
+    var startFlag: bool = true;
+    defer queue.close(io);    
 
-        // Open the file with error checking.
-        if (std.Io.Dir.cwd().openFile(io, filename, .{ .mode = .read_only, .lock = .exclusive })) |file| {
-            defer file.close(io);
-            var buf: [1024]u8 = undefined; // must be big enough for longest line
-            var reader: std.Io.File.Reader = file.reader(io, &buf);
-            var startFlag: bool = true;
-            while (try reader.interface.takeDelimiter('\n')) |line| {
-                if (line[0] == '>') {
-                    if (!startFlag) {
-                        const p: *Protein = try .init(allocator, header, sequence.items);
-                        try queue.putOne(io, p.*);
-                        header = "";
-                        sequence.clearRetainingCapacity();
-                    } else { startFlag = false; }
-                    header = line;
-                } else {
-                    try sequence.appendSlice(allocator, line);
+    // Open the file with error checking.
+    if (std.Io.Dir.cwd().openFile(io, filename, .{ .mode = .read_only, .lock = .exclusive })) |file| {
+        defer file.close(io);
+        var buf: [1024]u8 = undefined; // must be big enough for longest line
+        var reader: std.Io.File.Reader = file.reader(io, &buf);
+        while (try reader.interface.takeDelimiter('\n')) |line| {
+            if (line[0] == '>') {
+                if (!startFlag) {
+                    // make protein
+                    const p: *Protein = try .init(allocator, header, sequence.items);
+                    // put in queue
+                    try queue.putOne(io, p.*);
+                    // reset sequence
+                    sequence.clearRetainingCapacity();                    
                 }
+                header = line;
+                startFlag = false;
+            } else {
+                try sequence.appendSlice(allocator, line);
             }
-        } else |err| switch (err) {
-            error.FileNotFound, error.AccessDenied => {
-                std.debug.print("unable to open file: {}\n", .{err});
-            },
-            else => |e| return e,
         }
-    
+    } else |err| switch (err) {
+        error.FileNotFound, error.AccessDenied => {
+            std.debug.print("unable to open file: {}\n", .{err});
+        },
+        else => |e| return e,
+    }
+
     const p: *Protein = try .init(allocator, header, sequence.items);
     try queue.putOne(io, p.*);
+
+    // Signal that we're done sending.
+//    queue.close(io);    
 }
 
 pub fn proteinConsumer(
     io: Io,
     queue: *Io.Queue(Protein),
 ) !Protein {
-    return queue.getOne(io);
+    const value = queue.getOne(io) catch |err| {
+        return err;
+    };
+    return value;
 }
 
+// pub fn proteinConsumer(
+//     io: Io,
+//     queue: *Io.Queue(Protein),
+// ) !Protein {
+//     const value = queue.getOne(io) catch |err| switch (err) {
+//         error.Closed => return err,
+//         error.Canceled => return err,
+//         };
+//     return value;
+// }
