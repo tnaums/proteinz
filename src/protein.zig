@@ -121,6 +121,7 @@ pub const Protein = struct {
         // Free sequence and header memory
         allocator.free(self.sequence);
         allocator.free(self.header);
+//        allocator.destroy(self.mass);
         // Destroy the struct
         allocator.destroy(self);
     }
@@ -140,6 +141,10 @@ pub const Protein = struct {
             const k = std.meta.stringToEnum(AminoAcid, &[_]u8{aa});
             if (k) |key| {
                 mass += massMap2.get(key); // orelse unreachable;
+            } else if (aa == '*') {
+                return mass;
+            } else {
+                return 0.0;
             }
         }
 

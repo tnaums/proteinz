@@ -7,7 +7,9 @@ const REPL = @import("repl.zig");
 const Closed = Io.QueueClosedError.Closed;
 
 pub fn main(init: std.process.Init) !void {
-    const gpa = init.gpa;
+    //    const gpa = init.gpa;
+    var debug = std.heap.DebugAllocator(.{}){};
+    const gpa = debug.allocator();
     const io = init.io;
     const args = try init.minimal.args.toSlice(init.arena.allocator());
 
@@ -31,6 +33,7 @@ pub fn main(init: std.process.Init) !void {
     var myProtein: Protein = undefined;
     defer myProtein.deinit(gpa);
 
+    var counter: u16 = 0;
     while (true) {
         var consumer_task = try io.concurrent(proteinConsumer, .{ io, &queue });
         defer _ = consumer_task.cancel(io) catch {};
@@ -42,8 +45,10 @@ pub fn main(init: std.process.Init) !void {
         }
         std.debug.print("protein: {s}\n", .{myProtein.header});
         std.debug.print("sequence: {s}\n", .{myProtein.sequence});
-        std.debug.print("mass: {d}\n", .{myProtein.mass});
+        std.debug.print("mass: {d:.3}\n", .{myProtein.mass});
+        if (myProtein.sequence.len > counter) { counter = @intCast(myProtein.sequence.len); }
     }
+    std.debug.print("The longest protein has {d} amino acids.\n", .{counter});
 
     // test repl
     while (true) {
