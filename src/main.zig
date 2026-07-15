@@ -35,6 +35,7 @@ pub fn main(init: std.process.Init) !void {
 
     var counter: u16 = 0;
     while (true) {
+
         var consumer_task = try io.concurrent(proteinConsumer, .{ io, &queue });
         defer _ = consumer_task.cancel(io) catch {};
         if (consumer_task.await(io)) |p| {
@@ -52,8 +53,11 @@ pub fn main(init: std.process.Init) !void {
 
     // test repl
     while (true) {
-        REPL.userInput(io, gpa) catch {
-            std.debug.print("The input line was too long.\n", .{});
+        REPL.userInput(io, gpa) catch |err| switch (err) {
+            error.NotFound => std.debug.print("incorrect command. Please try again.\n", .{}),
+            error.Exit => break,
+            else => std.debug.print("Some other error.\n", .{}),
         };
     }
 }
+

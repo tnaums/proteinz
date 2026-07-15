@@ -140,11 +140,11 @@ pub const Protein = struct {
         for (sequence) |aa| {
             const k = std.meta.stringToEnum(AminoAcid, &[_]u8{aa});
             if (k) |key| {
-                mass += massMap2.get(key); // orelse unreachable;
+                mass += massMap2.get(key);
             } else if (aa == '*') {
-                return mass;
+                return mass; // stop codon, we are done
             } else {
-                return 0.0;
+                return 0.0; // something went wrong
             }
         }
 
