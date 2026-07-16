@@ -142,7 +142,7 @@ pub const Protein = struct {
             if (k) |key| {
                 mass += massMap2.get(key);
             } else if (aa == '*') {
-                return mass; // stop codon, we are done
+                return mass / 1000; // stop codon, we are done
             } else {
                 return 0.0; // something went wrong
             }

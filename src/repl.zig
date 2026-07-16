@@ -7,34 +7,48 @@ const CommandError = error {
 };
 
 const Command = enum {
+    parse,
     help,
     exit,
 };
 
 const descriptionMap: std.EnumArray(Command, []const u8) = .init(.{
+    .parse = "parse a proteome",
     .help = "displays a help message",
     .exit = "exit proteinz",
 });
 
-const commandMap: std.EnumArray(Command, *const fn() CommandError!void) = .init(.{
+const commandMap: std.EnumArray(Command, *const fn(io: Io, gpa: std.mem.Allocator) CommandError!void) = .init(.{
+    .parse = commandParse,
     .help = commandHelp,
     .exit = commandExit,
 });
 
 const nameMap: std.EnumArray(Command, []const u8) = .init(.{
+    .parse = "parse",
     .help = "help",
     .exit = "exit",
 });
 
-pub fn commandExit() CommandError!void {
-    std.debug.print("Exiting repl...\n", .{});
+pub fn commandParse(io: Io, gpa: std.mem.Allocator) CommandError!void {
+    _ = io;
+    _ = gpa;
+    std.debug.print("Parsing proteome file...\n", .{});
+}
+
+pub fn commandExit(io: Io, gpa: std.mem.Allocator) CommandError!void {
+    _ = io;
+    _ = gpa;
+    std.debug.print("exiting repl...\n", .{});
     return CommandError.Exit;
 }
 
-pub fn commandHelp() CommandError!void {
+pub fn commandHelp(io: Io, gpa: std.mem.Allocator) CommandError!void {
+    _ = io;
+    _ = gpa;
     std.debug.print("\nWelcome to proteinz, the protein repl!\n------\nUsage:\n------\n", .{});
     inline for (std.enums.values(Command)) |e| {
-        std.debug.print("{s}: ", .{nameMap.get(e)});
+        std.debug.print("{s:>6}: ", .{nameMap.get(e)});
         std.debug.print("{s}\n", .{descriptionMap.get(e)});
     }
 
@@ -59,7 +73,7 @@ pub fn userInput(io: Io, gpa: std.mem.Allocator) !void {
     // parse into words
     const cmd = try cleanInput(line_input, gpa);
     const c = commandMap.get(cmd);
-    try c();
+    try c(io, gpa);
 }
 
 fn cleanInput(line_input: []const u8, gpa: std.mem.Allocator) !Command {

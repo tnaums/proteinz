@@ -31,6 +31,10 @@ pub fn main(init: std.process.Init) !void {
     defer producer_task.cancel(io) catch {};
 
     var counter: u16 = 0;
+    var maxMass: f32 = 0.0;
+    var biggestProtein: Protein = undefined;
+    var longestProtein: Protein = undefined;
+    
     while (true) {
         var myProtein: *const Protein = undefined;
 
@@ -39,20 +43,37 @@ pub fn main(init: std.process.Init) !void {
         if (consumer_task.await(io)) |*p| {
             myProtein = p;
         } else |err| {
-            std.debug.print("Found {any}\n", .{err});
+            std.debug.print("Finished parsing sequence file: {any}\n", .{err});
             break;
-        }
+         }
         std.debug.print("protein: {s}\n", .{myProtein.header});
         std.debug.print("sequence: {s}\n", .{myProtein.sequence});
         std.debug.print("mass: {d:.3}\n", .{myProtein.mass});
-        if (myProtein.sequence.len > counter) { counter = @intCast(myProtein.sequence.len); }
+        if (myProtein.sequence.len > counter) {
+            counter = @intCast(myProtein.sequence.len);
+            longestProtein = myProtein.*;
+        }
+        if (myProtein.mass > maxMass) {
+            maxMass = myProtein.mass;
+            biggestProtein = myProtein.*;
+        }
     }
     std.debug.print("The longest protein has {d} amino acids.\n", .{counter});
+
+
+    std.debug.print("\nThe protein with the largest mass was:\n", .{});
+    std.debug.print("{s}\n", .{biggestProtein.header});
+    std.debug.print("It has a mass of {d} kDa.\n", .{maxMass});    
+
+    std.debug.print("\nThe longest protein was:\n", .{});
+    std.debug.print("{s}\n", .{longestProtein.header});
+    std.debug.print("It has {d} amino acids.\n", .{counter});    
+
 
     // test repl
     while (true) {
         REPL.userInput(io, gpa) catch |err| switch (err) {
-            error.NotFound => std.debug.print("incorrect command. Please try again.\n", .{}),
+            error.NotFound => std.debug.print("Command not found. Try 'help'.\n", .{}),
             error.Exit => break,
             else => std.debug.print("Some other error.\n", .{}),
         };
