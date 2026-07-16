@@ -27,7 +27,7 @@ const nameMap: std.EnumArray(Command, []const u8) = .init(.{
 });
 
 pub fn commandExit() CommandError!void {
-    std.debug.print("Please exit in an orderly fashion.\n", .{});
+    std.debug.print("Exiting repl...\n", .{});
     return CommandError.Exit;
 }
 

@@ -7,9 +7,9 @@ const REPL = @import("repl.zig");
 const Closed = Io.QueueClosedError.Closed;
 
 pub fn main(init: std.process.Init) !void {
-    //    const gpa = init.gpa;
-    var debug = std.heap.DebugAllocator(.{}){};
-    const gpa = debug.allocator();
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+    const gpa = arena.allocator();
     const io = init.io;
     const args = try init.minimal.args.toSlice(init.arena.allocator());
 
@@ -30,15 +30,13 @@ pub fn main(init: std.process.Init) !void {
     });
     defer producer_task.cancel(io) catch {};
 
-    var myProtein: Protein = undefined;
-    defer myProtein.deinit(gpa);
-
     var counter: u16 = 0;
     while (true) {
+        var myProtein: *const Protein = undefined;
 
         var consumer_task = try io.concurrent(proteinConsumer, .{ io, &queue });
         defer _ = consumer_task.cancel(io) catch {};
-        if (consumer_task.await(io)) |p| {
+        if (consumer_task.await(io)) |*p| {
             myProtein = p;
         } else |err| {
             std.debug.print("Found {any}\n", .{err});
