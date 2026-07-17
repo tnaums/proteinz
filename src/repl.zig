@@ -1,7 +1,10 @@
 const std = @import("std");
 const Io = std.Io;
+const Protein = @import("protein.zig").Protein;
+const proteinProducer = @import("protein.zig").proteinProducer;
+const proteinConsumer = @import("protein.zig").proteinConsumer;
 
-const CommandError = error {
+const CommandError = error{
     NotFound,
     Exit,
 };
@@ -18,7 +21,7 @@ const descriptionMap: std.EnumArray(Command, []const u8) = .init(.{
     .exit = "exit proteinz",
 });
 
-const commandMap: std.EnumArray(Command, *const fn(io: Io, gpa: std.mem.Allocator) CommandError!void) = .init(.{
+const commandMap: std.EnumArray(Command, *const fn (io: Io, gpa: std.mem.Allocator, stdout: *Io.Writer) CommandError!void) = .init(.{
     .parse = commandParse,
     .help = commandHelp,
     .exit = commandExit,
@@ -30,28 +33,77 @@ const nameMap: std.EnumArray(Command, []const u8) = .init(.{
     .exit = "exit",
 });
 
-pub fn commandParse(io: Io, gpa: std.mem.Allocator) CommandError!void {
-    _ = io;
-    _ = gpa;
+pub fn commandParse(io: Io, gpa: std.mem.Allocator, stdout: *Io.Writer) CommandError!void {
+    _ = stdout;
+    const filename: []const u8 = "sequences/proteome_truncated.fa"; // set a default
+    selectFile(io) catch {};
+
+    var queue: Io.Queue(Protein) = .init(&.{});
+    // Start proteinProducer
+    var producer_task = io.concurrent(proteinProducer, .{
+        io, gpa, &queue, filename,
+    }) catch unreachable;
+    defer producer_task.cancel(io) catch {};
+
+    var counter: u16 = 0;
+    var maxMass: f32 = 0.0;
+    var biggestProtein: Protein = undefined;
+    var longestProtein: Protein = undefined;
+
+    while (true) {
+        var myProtein: *const Protein = undefined;
+
+        var consumer_task = io.concurrent(proteinConsumer, .{ io, &queue }) catch unreachable;
+        defer _ = consumer_task.cancel(io) catch {};
+        if (consumer_task.await(io)) |*p| {
+            myProtein = p;
+        } else |err| {
+            std.debug.print("Finished parsing sequence file: {any}\n", .{err});
+            break;
+        }
+        std.debug.print("protein: {s}\n", .{myProtein.header});
+        std.debug.print("sequence: {s}\n", .{myProtein.sequence});
+        std.debug.print("mass: {d:.3}\n\n", .{myProtein.mass});
+        if (myProtein.sequence.len > counter) {
+            counter = @intCast(myProtein.sequence.len);
+            longestProtein = myProtein.*;
+        }
+        if (myProtein.mass > maxMass) {
+            maxMass = myProtein.mass;
+            biggestProtein = myProtein.*;
+        }
+    }
+    std.debug.print("The longest protein has {d} amino acids.\n", .{counter});
+
+    std.debug.print("\nThe protein with the largest mass was:\n", .{});
+    std.debug.print("{s}\n", .{biggestProtein.header});
+    std.debug.print("It has a mass of {d} kDa.\n", .{maxMass});
+
+    std.debug.print("\nThe longest protein was:\n", .{});
+    std.debug.print("{s}\n", .{longestProtein.header});
+    std.debug.print("It has {d} amino acids.\n", .{counter});
+
     std.debug.print("Parsing proteome file...\n", .{});
 }
 
-pub fn commandExit(io: Io, gpa: std.mem.Allocator) CommandError!void {
+pub fn commandExit(io: Io, gpa: std.mem.Allocator, stdout: *Io.Writer) CommandError!void {
+//    _ = stdout;
     _ = io;
     _ = gpa;
-    std.debug.print("exiting repl...\n", .{});
+    stdout.print("exiting repl...\n", .{}) catch {};
+    stdout.flush() catch {};
     return CommandError.Exit;
 }
 
-pub fn commandHelp(io: Io, gpa: std.mem.Allocator) CommandError!void {
+pub fn commandHelp(io: Io, gpa: std.mem.Allocator, stdout: *Io.Writer) CommandError!void {
     _ = io;
     _ = gpa;
-    std.debug.print("\nWelcome to proteinz, the protein repl!\n------\nUsage:\n------\n", .{});
+    stdout.print("\nWelcome to proteinz, the protein repl!\n------\nUsage:\n------\n", .{}) catch {};
     inline for (std.enums.values(Command)) |e| {
-        std.debug.print("{s:>6}: ", .{nameMap.get(e)});
-        std.debug.print("{s}\n", .{descriptionMap.get(e)});
+        stdout.print("{s:>6}: ", .{nameMap.get(e)}) catch {};
+        stdout.print("{s}\n", .{descriptionMap.get(e)}) catch {};
+        stdout.flush() catch {};
     }
-
 }
 
 pub fn userInput(io: Io, gpa: std.mem.Allocator) !void {
@@ -59,7 +111,7 @@ pub fn userInput(io: Io, gpa: std.mem.Allocator) !void {
     var stdout_writer = std.Io.File.stdout().writer(io, &out_buffer);
     const stdout = &stdout_writer.interface;
 
-    var in_buffer: [80]u8 = undefined;    
+    var in_buffer: [80]u8 = undefined;
     var stdin_reader = std.Io.File.stdin().reader(io, &in_buffer);
     const stdin = &stdin_reader.interface;
 
@@ -73,7 +125,7 @@ pub fn userInput(io: Io, gpa: std.mem.Allocator) !void {
     // parse into words
     const cmd = try cleanInput(line_input, gpa);
     const c = commandMap.get(cmd);
-    try c(io, gpa);
+    try c(io, gpa, stdout);
 }
 
 fn cleanInput(line_input: []const u8, gpa: std.mem.Allocator) !Command {
@@ -83,7 +135,7 @@ fn cleanInput(line_input: []const u8, gpa: std.mem.Allocator) !Command {
     defer gpa.free(lower);
     var it = std.mem.tokenizeSequence(u8, lower, " ");
     var cmd: Command = undefined;
-    
+
     if (it.next()) |first| {
         const k = std.meta.stringToEnum(Command, first); // ?T
         if (k) |key| {
@@ -91,11 +143,20 @@ fn cleanInput(line_input: []const u8, gpa: std.mem.Allocator) !Command {
         } else {
             return CommandError.NotFound;
         }
-        
     }
 
     if (it.next()) |second| {
         std.debug.print("command argument is: {s}\n", .{second});
     }
     return cmd;
+}
+
+fn selectFile(io: Io) !void {
+    const cwd = std.Io.Dir.cwd();
+    const dir = try cwd.openDir(io, "sequences", .{ .iterate = true });
+    var it = dir.iterate();
+    while (try it.next(io)) |entry| {
+        std.debug.print("File name: {s}\n", .{entry.name});
+    }
+    //    try stdout.flush();
 }
