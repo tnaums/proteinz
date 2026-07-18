@@ -121,7 +121,7 @@ pub const Protein = struct {
         // Free sequence and header memory
         allocator.free(self.sequence);
         allocator.free(self.header);
-//        allocator.destroy(self.mass);
+        //        allocator.destroy(self.mass);
         // Destroy the struct
         allocator.destroy(self);
     }
@@ -152,6 +152,59 @@ pub const Protein = struct {
     }
 };
 
+pub fn proteomeParser(
+    io: Io,
+    allocator: std.mem.Allocator,
+    filename: []const u8,
+) !void {
+    var header: std.ArrayList(u8) = .empty;
+    defer header.deinit(allocator);
+    var sequence: std.ArrayList(u8) = .empty;
+    defer sequence.deinit(allocator);
+    var startFlag: bool = true;
+
+    var proteome = ProteinArray{};
+    defer proteome.deinit(allocator);
+
+    if (std.Io.Dir.cwd().openFile(io, filename, .{ .mode = .read_only, .lock = .exclusive })) |file| {
+        defer file.close(io);
+        var buf: [100]u8 = undefined; // must be big enough for longest line
+        var reader: std.Io.File.Reader = file.reader(io, &buf);
+
+        while (try reader.interface.takeDelimiter('\n')) |line| {
+            if (line.len == 0) {
+                continue;
+            }
+            if (line[0] == '>') {
+                if (!startFlag) {
+                    //                    const p: *Protein = try .init(allocator, header.items, sequence.items);
+                    try proteome.append(allocator, .{ .header = header.items, .sequence = sequence.items, .mass = Protein.calculateMass2(sequence.items) });
+                    sequence.clearRetainingCapacity();
+                    header.clearRetainingCapacity();
+                }
+                try header.appendSlice(allocator, line);
+                startFlag = false;
+            } else {
+                try sequence.appendSlice(allocator, line);
+            }
+        }
+    } else |err| switch (err) {
+        error.FileNotFound, error.AccessDenied => {
+            std.debug.print("unable to open file: {}\n", .{err});
+        },
+        else => |e| return e,
+    }
+
+    //    const p: *Protein = try .init(allocator, header.items, sequence.items);
+    try proteome.append(allocator, .{ .header = header.items, .sequence = sequence.items, .mass = Protein.calculateMass2(sequence.items) });
+
+    for (proteome.items(.mass), proteome.items(.sequence), proteome.items(.header)) |m,s,h| {
+        std.debug.print("Header: {s}\n", .{h});
+        std.debug.print("Mass: {d}\n", .{m});
+        std.debug.print("Sequence: {s}\n", .{s});
+    }
+}
+
 pub fn proteinProducer(
     io: Io,
     allocator: std.mem.Allocator,
@@ -172,7 +225,9 @@ pub fn proteinProducer(
         var reader: std.Io.File.Reader = file.reader(io, &buf);
         // Fasta parser, puting each Protein struct into the queue
         while (try reader.interface.takeDelimiter('\n')) |line| {
-            if (line.len == 0) { continue; }
+            if (line.len == 0) {
+                continue;
+            }
             if (line[0] == '>') {
                 if (!startFlag) {
                     const p: *Protein = try .init(allocator, header.items, sequence.items);
@@ -195,7 +250,6 @@ pub fn proteinProducer(
 
     const p: *Protein = try .init(allocator, header.items, sequence.items);
     try queue.putOne(io, p.*);
-
 }
 
 pub fn proteinConsumer(

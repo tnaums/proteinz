@@ -3,7 +3,8 @@ const Io = std.Io;
 const Protein = @import("protein.zig").Protein;
 const proteinProducer = @import("protein.zig").proteinProducer;
 const proteinConsumer = @import("protein.zig").proteinConsumer;
-
+const proteomeParser = @import("protein.zig").proteomeParser;
+const ProteinArray = @import("protein.zig").ProteinArray;
 const CommandError = error{
     NotFound,
     Exit,
@@ -11,27 +12,37 @@ const CommandError = error{
 
 const Command = enum {
     parse,
+    proteome,
     help,
     exit,
 };
 
 const descriptionMap: std.EnumArray(Command, []const u8) = .init(.{
     .parse = "parse a proteome",
+    .proteome = "read a proteome",
     .help = "displays a help message",
     .exit = "exit proteinz",
 });
 
 const commandMap: std.EnumArray(Command, *const fn (io: Io, gpa: std.mem.Allocator, stdout: *Io.Writer) CommandError!void) = .init(.{
     .parse = commandParse,
+    .proteome = commandProteome,
     .help = commandHelp,
     .exit = commandExit,
 });
 
 const nameMap: std.EnumArray(Command, []const u8) = .init(.{
     .parse = "parse",
+    .proteome = "proteome",
     .help = "help",
     .exit = "exit",
 });
+
+pub fn commandProteome(io: Io, gpa: std.mem.Allocator, stdout: *Io.Writer) CommandError!void {
+    _ = stdout;
+    const filename: []const u8 = "sequences/proteome_truncated.fa";
+    proteomeParser(io, gpa, filename) catch unreachable;
+}
 
 pub fn commandParse(io: Io, gpa: std.mem.Allocator, stdout: *Io.Writer) CommandError!void {
     _ = stdout;
@@ -87,7 +98,7 @@ pub fn commandParse(io: Io, gpa: std.mem.Allocator, stdout: *Io.Writer) CommandE
 }
 
 pub fn commandExit(io: Io, gpa: std.mem.Allocator, stdout: *Io.Writer) CommandError!void {
-//    _ = stdout;
+    //    _ = stdout;
     _ = io;
     _ = gpa;
     stdout.print("exiting repl...\n", .{}) catch {};
@@ -100,7 +111,7 @@ pub fn commandHelp(io: Io, gpa: std.mem.Allocator, stdout: *Io.Writer) CommandEr
     _ = gpa;
     stdout.print("\nWelcome to proteinz, the protein repl!\n------\nUsage:\n------\n", .{}) catch {};
     inline for (std.enums.values(Command)) |e| {
-        stdout.print("{s:>6}: ", .{nameMap.get(e)}) catch {};
+        stdout.print("{s:>8}: ", .{nameMap.get(e)}) catch {};
         stdout.print("{s}\n", .{descriptionMap.get(e)}) catch {};
         stdout.flush() catch {};
     }
