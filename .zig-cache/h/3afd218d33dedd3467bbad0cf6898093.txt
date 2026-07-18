@@ -823,5 +823,5 @@
 24525 1464019 1781792529000000000 52c7fac6ad48da05270f91f073a4af79 1 std/os/linux/bpf/helpers.zig
 2972 1463761 1781792529000000000 8c37c40098d399e3b36a078ce1d4e3a1 1 std/crypto/codecs/asn1/der/ArrayListReverse.zig
 627 1577269 1784317659991177377 c98a8507ebe9da79ca748243bfbd76bb 0 /home/todd/workspaces/github.com/tnaums/proteinz/src/main.zig
-5298 1577508 1784321075273012983 852a7c5dfb4f8e5958d4bb2a2e13cf94 0 /home/todd/workspaces/github.com/tnaums/proteinz/src/repl.zig
-5919 1577164 1784210975415849739 ca9931cdb41000feee8425f238410f86 0 /home/todd/workspaces/github.com/tnaums/proteinz/src/protein.zig
+5770 1577508 1784394060460527917 89e91df0a293b21da4a6fbcf6f2bb636 0 /home/todd/workspaces/github.com/tnaums/proteinz/src/repl.zig
+7855 1577164 1784394299165084534 234557c3f1013aa698f2b5c266aad645 0 /home/todd/workspaces/github.com/tnaums/proteinz/src/protein.zig

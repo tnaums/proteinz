@@ -165,20 +165,21 @@ pub fn proteomeParser(
 
     var proteome = ProteinArray{};
     defer proteome.deinit(allocator);
-
+    var p: *Protein = undefined;
     if (std.Io.Dir.cwd().openFile(io, filename, .{ .mode = .read_only, .lock = .exclusive })) |file| {
         defer file.close(io);
         var buf: [100]u8 = undefined; // must be big enough for longest line
         var reader: std.Io.File.Reader = file.reader(io, &buf);
 
+        
         while (try reader.interface.takeDelimiter('\n')) |line| {
             if (line.len == 0) {
                 continue;
             }
             if (line[0] == '>') {
                 if (!startFlag) {
-                    //                    const p: *Protein = try .init(allocator, header.items, sequence.items);
-                    try proteome.append(allocator, .{ .header = header.items, .sequence = sequence.items, .mass = Protein.calculateMass2(sequence.items) });
+                    p = try .init(allocator, header.items, sequence.items);
+                    try proteome.append(allocator, p.*);
                     sequence.clearRetainingCapacity();
                     header.clearRetainingCapacity();
                 }
@@ -195,8 +196,8 @@ pub fn proteomeParser(
         else => |e| return e,
     }
 
-    //    const p: *Protein = try .init(allocator, header.items, sequence.items);
-    try proteome.append(allocator, .{ .header = header.items, .sequence = sequence.items, .mass = Protein.calculateMass2(sequence.items) });
+    p = try .init(allocator, header.items, sequence.items);
+    try proteome.append(allocator, p.*);
 
     for (proteome.items(.mass), proteome.items(.sequence), proteome.items(.header)) |m,s,h| {
         std.debug.print("Header: {s}\n", .{h});
