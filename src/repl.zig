@@ -14,7 +14,6 @@ const CommandError = error{
 
 const Command = enum {
     parse,
-    proteome,
     uniprot,
     help,
     exit,
@@ -22,7 +21,6 @@ const Command = enum {
 
 const descriptionMap: std.EnumArray(Command, []const u8) = .init(.{
     .parse = "parse a proteome",
-    .proteome = "read a proteome",
     .uniprot = "uniprot <accession>",
     .help = "displays a help message",
     .exit = "exit proteinz",
@@ -30,7 +28,6 @@ const descriptionMap: std.EnumArray(Command, []const u8) = .init(.{
 
 const commandMap: std.EnumArray(Command, *const fn (io: Io, gpa: std.mem.Allocator, stdout: *Io.Writer, argument: ?[]const u8) CommandError!void) = .init(.{
     .parse = commandParse,
-    .proteome = commandProteome,
     .uniprot = commandUniprot,
     .help = commandHelp,
     .exit = commandExit,
@@ -38,7 +35,6 @@ const commandMap: std.EnumArray(Command, *const fn (io: Io, gpa: std.mem.Allocat
 
 const nameMap: std.EnumArray(Command, []const u8) = .init(.{
     .parse = "parse",
-    .proteome = "proteome",
     .uniprot = "uniprot",
     .help = "help",
     .exit = "exit",
@@ -48,14 +44,6 @@ pub fn commandUniprot(io: Io, gpa: std.mem.Allocator, stdout: *Io.Writer, argume
     _ = stdout;
     const accession = argument orelse "P29022";
     uniprotGET(io, gpa, accession) catch {};
-}
-
-
-pub fn commandProteome(io: Io, gpa: std.mem.Allocator, stdout: *Io.Writer, argument: ?[]const u8) CommandError!void {
-    _ = argument;
-    _ = stdout;
-    const filename: []const u8 = "sequences/proteome_truncated.fa";
-    proteomeParser(io, gpa, filename) catch unreachable;
 }
 
 pub fn commandParse(io: Io, gpa: std.mem.Allocator, stdout: *Io.Writer, argument: ?[]const u8) CommandError!void {
@@ -156,14 +144,12 @@ pub fn userInput(io: Io, gpa: std.mem.Allocator) !void {
     try c(io, gpa, stdout, input[1]);
 }
 
-fn cleanInput(line_input: []const u8, gpa: std.mem.Allocator) !struct{ Command, []u8 } {
+fn cleanInput(line_input: []const u8, gpa: std.mem.Allocator) !struct{ Command, ?[]u8 } {
     const whitespace = " \t\n\r";
     const trimmed = std.mem.trim(u8, line_input, whitespace);
-//    const lower = try std.ascii.allocLowerString(gpa, trimmed);
     defer gpa.free(trimmed);
     var it = std.mem.tokenizeSequence(u8, trimmed, " ");
     var cmd: Command = undefined;
-//    var argument: ?[]const u8 = null;
     var argument: []u8 = undefined;
     if (it.next()) |first| {
         const lower = try std.ascii.allocLowerString(gpa, first);
@@ -178,10 +164,11 @@ fn cleanInput(line_input: []const u8, gpa: std.mem.Allocator) !struct{ Command, 
     if (it.next()) |second| {
         argument = try gpa.alloc(u8, second.len);
         @memcpy(argument, second);
+        std.debug.print("in cleanInput: {s}\n", .{argument});
     } else {
         argument = "";
     }
-
+    
     return .{ cmd, argument };
 }
 
