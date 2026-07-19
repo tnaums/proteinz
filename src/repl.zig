@@ -13,6 +13,7 @@ const CommandError = error{
 const Command = enum {
     parse,
     proteome,
+    uniprot,
     help,
     exit,
 };
@@ -20,6 +21,7 @@ const Command = enum {
 const descriptionMap: std.EnumArray(Command, []const u8) = .init(.{
     .parse = "parse a proteome",
     .proteome = "read a proteome",
+    .uniprot = "download uniprot by accession",
     .help = "displays a help message",
     .exit = "exit proteinz",
 });
@@ -27,6 +29,7 @@ const descriptionMap: std.EnumArray(Command, []const u8) = .init(.{
 const commandMap: std.EnumArray(Command, *const fn (io: Io, gpa: std.mem.Allocator, stdout: *Io.Writer) CommandError!void) = .init(.{
     .parse = commandParse,
     .proteome = commandProteome,
+    .uniprot = commandUniprot,
     .help = commandHelp,
     .exit = commandExit,
 });
@@ -34,9 +37,18 @@ const commandMap: std.EnumArray(Command, *const fn (io: Io, gpa: std.mem.Allocat
 const nameMap: std.EnumArray(Command, []const u8) = .init(.{
     .parse = "parse",
     .proteome = "proteome",
+    .uniprot = "uniprot",
     .help = "help",
     .exit = "exit",
 });
+
+pub fn commandUniprot(io: Io, gpa: std.mem.Allocator, stdout: *Io.Writer) CommandError!void {
+    _ = io;
+    _ = gpa;
+    stdout.print("Downloading accession...", .{}) catch {};
+    stdout.flush() catch {};
+}
+
 
 pub fn commandProteome(io: Io, gpa: std.mem.Allocator, stdout: *Io.Writer) CommandError!void {
     _ = stdout;
