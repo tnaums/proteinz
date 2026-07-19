@@ -42,7 +42,7 @@ const nameMap: std.EnumArray(Command, []const u8) = .init(.{
 
 pub fn commandUniprot(io: Io, gpa: std.mem.Allocator, stdout: *Io.Writer, argument: ?[]const u8) CommandError!void {
     _ = stdout;
-    const accession = argument orelse "P29022";
+    const accession: []const u8 = argument orelse "P29022";
     uniprotGET(io, gpa, accession) catch {};
 }
 
