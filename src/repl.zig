@@ -5,6 +5,8 @@ const proteinProducer = @import("protein.zig").proteinProducer;
 const proteinConsumer = @import("protein.zig").proteinConsumer;
 const proteomeParser = @import("protein.zig").proteomeParser;
 const ProteinArray = @import("protein.zig").ProteinArray;
+const uniprotGET = @import("uniprot.zig").uniprotGET;
+
 const CommandError = error{
     NotFound,
     Exit,
@@ -43,8 +45,8 @@ const nameMap: std.EnumArray(Command, []const u8) = .init(.{
 });
 
 pub fn commandUniprot(io: Io, gpa: std.mem.Allocator, stdout: *Io.Writer) CommandError!void {
-    _ = io;
-    _ = gpa;
+    const accession = "P29022";
+    uniprotGET(io, gpa, accession) catch {};
     stdout.print("Downloading accession...", .{}) catch {};
     stdout.flush() catch {};
 }
