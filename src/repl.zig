@@ -23,12 +23,12 @@ const Command = enum {
 const descriptionMap: std.EnumArray(Command, []const u8) = .init(.{
     .parse = "parse a proteome",
     .proteome = "read a proteome",
-    .uniprot = "download uniprot by accession",
+    .uniprot = "uniprot <accession>",
     .help = "displays a help message",
     .exit = "exit proteinz",
 });
 
-const commandMap: std.EnumArray(Command, *const fn (io: Io, gpa: std.mem.Allocator, stdout: *Io.Writer) CommandError!void) = .init(.{
+const commandMap: std.EnumArray(Command, *const fn (io: Io, gpa: std.mem.Allocator, stdout: *Io.Writer, argument: ?[]const u8) CommandError!void) = .init(.{
     .parse = commandParse,
     .proteome = commandProteome,
     .uniprot = commandUniprot,
@@ -44,22 +44,23 @@ const nameMap: std.EnumArray(Command, []const u8) = .init(.{
     .exit = "exit",
 });
 
-pub fn commandUniprot(io: Io, gpa: std.mem.Allocator, stdout: *Io.Writer) CommandError!void {
-    const accession = "P29022";
+pub fn commandUniprot(io: Io, gpa: std.mem.Allocator, stdout: *Io.Writer, argument: ?[]const u8) CommandError!void {
+    _ = stdout;
+    const accession = argument orelse "P29022";
     uniprotGET(io, gpa, accession) catch {};
-    stdout.print("Downloading accession...", .{}) catch {};
-    stdout.flush() catch {};
 }
 
 
-pub fn commandProteome(io: Io, gpa: std.mem.Allocator, stdout: *Io.Writer) CommandError!void {
+pub fn commandProteome(io: Io, gpa: std.mem.Allocator, stdout: *Io.Writer, argument: ?[]const u8) CommandError!void {
+    _ = argument;
     _ = stdout;
     const filename: []const u8 = "sequences/proteome_truncated.fa";
     proteomeParser(io, gpa, filename) catch unreachable;
 }
 
-pub fn commandParse(io: Io, gpa: std.mem.Allocator, stdout: *Io.Writer) CommandError!void {
+pub fn commandParse(io: Io, gpa: std.mem.Allocator, stdout: *Io.Writer, argument: ?[]const u8) CommandError!void {
     _ = stdout;
+    _ = argument;
     const filename: []const u8 = "sequences/proteome_truncated.fa"; // set a default
     selectFile(io) catch {};
 
@@ -111,8 +112,9 @@ pub fn commandParse(io: Io, gpa: std.mem.Allocator, stdout: *Io.Writer) CommandE
     std.debug.print("Parsing proteome file...\n", .{});
 }
 
-pub fn commandExit(io: Io, gpa: std.mem.Allocator, stdout: *Io.Writer) CommandError!void {
+pub fn commandExit(io: Io, gpa: std.mem.Allocator, stdout: *Io.Writer, argument: ?[]const u8) CommandError!void {
     //    _ = stdout;
+    _ = argument;
     _ = io;
     _ = gpa;
     stdout.print("exiting repl...\n", .{}) catch {};
@@ -120,7 +122,8 @@ pub fn commandExit(io: Io, gpa: std.mem.Allocator, stdout: *Io.Writer) CommandEr
     return CommandError.Exit;
 }
 
-pub fn commandHelp(io: Io, gpa: std.mem.Allocator, stdout: *Io.Writer) CommandError!void {
+pub fn commandHelp(io: Io, gpa: std.mem.Allocator, stdout: *Io.Writer, argument: ?[]const u8) CommandError!void {
+    _ = argument;
     _ = io;
     _ = gpa;
     stdout.print("\nWelcome to proteinz, the protein repl!\n------\nUsage:\n------\n", .{}) catch {};
@@ -148,21 +151,23 @@ pub fn userInput(io: Io, gpa: std.mem.Allocator) !void {
     const line_input = try stdin.takeDelimiter('\n') orelse "default";
 
     // parse into words
-    const cmd = try cleanInput(line_input, gpa);
-    const c = commandMap.get(cmd);
-    try c(io, gpa, stdout);
+    const input = try cleanInput(line_input, gpa);
+    const c = commandMap.get(input[0]);
+    try c(io, gpa, stdout, input[1]);
 }
 
-fn cleanInput(line_input: []const u8, gpa: std.mem.Allocator) !Command {
+fn cleanInput(line_input: []const u8, gpa: std.mem.Allocator) !struct{ Command, []u8 } {
     const whitespace = " \t\n\r";
     const trimmed = std.mem.trim(u8, line_input, whitespace);
-    const lower = try std.ascii.allocLowerString(gpa, trimmed);
-    defer gpa.free(lower);
-    var it = std.mem.tokenizeSequence(u8, lower, " ");
+//    const lower = try std.ascii.allocLowerString(gpa, trimmed);
+    defer gpa.free(trimmed);
+    var it = std.mem.tokenizeSequence(u8, trimmed, " ");
     var cmd: Command = undefined;
-
+//    var argument: ?[]const u8 = null;
+    var argument: []u8 = undefined;
     if (it.next()) |first| {
-        const k = std.meta.stringToEnum(Command, first); // ?T
+        const lower = try std.ascii.allocLowerString(gpa, first);
+        const k = std.meta.stringToEnum(Command, lower); // ?T
         if (k) |key| {
             cmd = key;
         } else {
@@ -171,9 +176,13 @@ fn cleanInput(line_input: []const u8, gpa: std.mem.Allocator) !Command {
     }
 
     if (it.next()) |second| {
-        std.debug.print("command argument is: {s}\n", .{second});
+        argument = try gpa.alloc(u8, second.len);
+        @memcpy(argument, second);
+    } else {
+        argument = "";
     }
-    return cmd;
+
+    return .{ cmd, argument };
 }
 
 fn selectFile(io: Io) !void {
