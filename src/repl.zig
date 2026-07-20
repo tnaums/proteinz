@@ -42,8 +42,8 @@ const nameMap: std.EnumArray(Command, []const u8) = .init(.{
 
 pub fn commandUniprot(io: Io, gpa: std.mem.Allocator, stdout: *Io.Writer, argument: ?[]const u8) CommandError!void {
     _ = stdout;
-    const accession: []const u8 = argument orelse "P29022";
-    uniprotGET(io, gpa, accession) catch {};
+//    const accession: []const u8 = argument orelse "P29022";
+    uniprotGET(io, gpa, argument) catch {};
 }
 
 pub fn commandParse(io: Io, gpa: std.mem.Allocator, stdout: *Io.Writer, argument: ?[]const u8) CommandError!void {
@@ -150,7 +150,7 @@ fn cleanInput(line_input: []const u8, gpa: std.mem.Allocator) !struct{ Command, 
     defer gpa.free(trimmed);
     var it = std.mem.tokenizeSequence(u8, trimmed, " ");
     var cmd: Command = undefined;
-    var argument: []u8 = undefined;
+    var argument: ?[]u8 = null;
     if (it.next()) |first| {
         const lower = try std.ascii.allocLowerString(gpa, first);
         const k = std.meta.stringToEnum(Command, lower); // ?T
@@ -162,11 +162,9 @@ fn cleanInput(line_input: []const u8, gpa: std.mem.Allocator) !struct{ Command, 
     }
 
     if (it.next()) |second| {
-        argument = try gpa.alloc(u8, second.len);
-        @memcpy(argument, second);
-        std.debug.print("in cleanInput: {s}\n", .{argument});
-    } else {
-        argument = "";
+        const argument2 = try gpa.alloc(u8, second.len);
+        @memcpy(argument2, second);
+        argument = argument2;
     }
     
     return .{ cmd, argument };

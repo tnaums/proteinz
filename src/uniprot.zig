@@ -5,9 +5,13 @@ const http = std.http;
 const base = "https://www.ebi.ac.uk/proteins/api/proteins/";
 
 
-pub fn uniprotGET(io: Io, gpa: std.mem.Allocator, accession: []const u8) !void {
-    std.debug.print("in uniprotGET, accession is: {s}\n", .{accession});
-    const complete = try std.fmt.allocPrint(gpa, "{s}{s}", .{ base, accession });
+pub fn uniprotGET(io: Io, gpa: std.mem.Allocator, accession: ?[]const u8) !void {
+    var complete: []const u8 = undefined;
+    if (accession) |value| {
+        complete = try std.fmt.allocPrint(gpa, "{s}{s}", .{ base, value });
+    } else {
+        complete = try std.fmt.allocPrint(gpa, "{s}C7YS44", .{ base });
+    }
     defer gpa.free(complete);
     
     var client: http.Client = .{ .allocator = gpa, .io = io };
