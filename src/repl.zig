@@ -10,6 +10,7 @@ const uniprotGET = @import("uniprot.zig").uniprotGET;
 const CommandError = error{
     NotFound,
     Exit,
+    Internal,
 };
 
 const Command = enum {
@@ -43,20 +44,25 @@ const nameMap: std.EnumArray(Command, []const u8) = .init(.{
 pub fn commandUniprot(io: Io, gpa: std.mem.Allocator, stdout: *Io.Writer, argument: ?[]const u8) CommandError!void {
     _ = stdout;
 //    const accession: []const u8 = argument orelse "P29022";
-    uniprotGET(io, gpa, argument) catch {};
+    uniprotGET(io, gpa, argument) catch {
+        return CommandError.Internal;
+    };
 }
 
 pub fn commandParse(io: Io, gpa: std.mem.Allocator, stdout: *Io.Writer, argument: ?[]const u8) CommandError!void {
     _ = stdout;
     _ = argument;
     const filename: []const u8 = "sequences/proteome_truncated.fa"; // set a default
-    selectFile(io) catch {};
+    //    const filename: *[]const u8 = try selectFile(io, gpa) catch { return CommandError.Internal; };
+    selectFile(io, gpa) catch { return CommandError.Internal; };
 
     var queue: Io.Queue(Protein) = .init(&.{});
     // Start proteinProducer
     var producer_task = io.concurrent(proteinProducer, .{
         io, gpa, &queue, filename,
-    }) catch unreachable;
+    }) catch {
+        return CommandError.Internal;
+    };
     defer producer_task.cancel(io) catch {};
 
     var counter: u16 = 0;
@@ -105,8 +111,12 @@ pub fn commandExit(io: Io, gpa: std.mem.Allocator, stdout: *Io.Writer, argument:
     _ = argument;
     _ = io;
     _ = gpa;
-    stdout.print("exiting repl...\n", .{}) catch {};
-    stdout.flush() catch {};
+    stdout.print("exiting repl...\n", .{}) catch {
+        return CommandError.Internal;
+    };
+    stdout.flush() catch {
+        return CommandError.Internal;
+    };
     return CommandError.Exit;
 }
 
@@ -114,11 +124,19 @@ pub fn commandHelp(io: Io, gpa: std.mem.Allocator, stdout: *Io.Writer, argument:
     _ = argument;
     _ = io;
     _ = gpa;
-    stdout.print("\nWelcome to proteinz, the protein repl!\n------\nUsage:\n------\n", .{}) catch {};
+    stdout.print("\nWelcome to proteinz, the protein repl!\n------\nUsage:\n------\n", .{}) catch {
+        return CommandError.Internal;
+    };
     inline for (std.enums.values(Command)) |e| {
-        stdout.print("{s:>8}: ", .{nameMap.get(e)}) catch {};
-        stdout.print("{s}\n", .{descriptionMap.get(e)}) catch {};
-        stdout.flush() catch {};
+        stdout.print("{s:>8}: ", .{nameMap.get(e)}) catch {
+            return CommandError.Internal;
+        };
+        stdout.print("{s}\n", .{descriptionMap.get(e)}) catch {
+            return CommandError.Internal;
+        };
+        stdout.flush() catch {
+            return CommandError.Internal;
+        };
     }
 }
 
@@ -170,12 +188,45 @@ fn cleanInput(line_input: []const u8, gpa: std.mem.Allocator) !struct{ Command, 
     return .{ cmd, argument };
 }
 
-fn selectFile(io: Io) !void {
+fn selectFile(io: Io, gpa: std.mem.Allocator) !void {
     const cwd = std.Io.Dir.cwd();
     const dir = try cwd.openDir(io, "sequences", .{ .iterate = true });
     var it = dir.iterate();
-    while (try it.next(io)) |entry| {
-        std.debug.print("File name: {s}\n", .{entry.name});
+    var idx: u8 = 1;
+    while (try it.next(io)) |entry| : (idx+=1) {
+        std.debug.print("Type of entry: {}\n", .{@TypeOf(entry)});
+        std.debug.print("{d}: {s}\n", .{idx, entry.name});
     }
-    //    try stdout.flush();
+
+    var out_buffer: [80]u8 = undefined;
+    var stdout_writer = std.Io.File.stdout().writer(io, &out_buffer);
+    const stdout = &stdout_writer.interface;
+
+    var in_buffer: [80]u8 = undefined;
+    var stdin_reader = std.Io.File.stdin().reader(io, &in_buffer);
+    const stdin = &stdin_reader.interface;
+
+    // Print the prompt.
+    try stdout.print("\nWhich file would you like to open? ", .{});
+    try stdout.flush();
+
+    // Get a line of input. Function returns both error union and optional
+    const line_input = try stdin.takeDelimiter('\n') orelse "default";
+    const file_number = try std.fmt.parseInt(u8, line_input, 10);
+    try stdout.print("You chose file number {d}\n", .{file_number});
+    try stdout.flush();
+
+    
+    var it2 = dir.iterate();
+    idx = 1;
+
+    while (try it2.next(io)) |entry| : (idx+=1) {
+        std.debug.print("{d}: {s}\n", .{idx, entry.name});
+        if (file_number == idx) {
+            const selected_file: []const u8 = try gpa.dupe(u8, entry.name);
+            std.debug.print("Selected file: {s}\n", .{selected_file});
+        }
+    }
+
+    
 }
