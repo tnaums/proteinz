@@ -7,6 +7,8 @@ const proteomeParser = @import("protein.zig").proteomeParser;
 const ProteinArray = @import("protein.zig").ProteinArray;
 const uniprotGET = @import("uniprot.zig").uniprotGET;
 
+const folder: []const u8 = "sequences/";
+
 const CommandError = error{
     NotFound,
     Exit,
@@ -52,16 +54,17 @@ pub fn commandUniprot(io: Io, gpa: std.mem.Allocator, stdout: *Io.Writer, argume
 pub fn commandParse(io: Io, gpa: std.mem.Allocator, stdout: *Io.Writer, argument: ?[]const u8) CommandError!void {
     _ = stdout;
     _ = argument;
-    const filename: []const u8 = "sequences/proteome_truncated.fa"; // set a default
-    selectFile(io, gpa) catch {};
+    const filename = selectFile(io, gpa) catch { return CommandError.Internal; };
+    var buffer: [80]u8 = undefined;
+    const combined_path = std.fmt.bufPrint(&buffer, "{s}{s}", .{ folder, filename }) catch { return CommandError.Internal; };
     var queue: Io.Queue(Protein) = .init(&.{});
     // Start proteinProducer
     var producer_task = io.concurrent(proteinProducer, .{
-        io, gpa, &queue, filename,
+        io, gpa, &queue, combined_path,
     }) catch {
         return CommandError.Internal;
     };
-    defer producer_task.cancel(io) catch {};
+    defer producer_task.cancel(io) catch { };
 
     var counter: u16 = 0;
     var maxMass: f32 = 0.0;
@@ -187,9 +190,9 @@ fn cleanInput(line_input: []const u8, gpa: std.mem.Allocator) !struct{ Command, 
     return .{ cmd, argument };
 }
 
-fn selectFile(io: Io, gpa: std.mem.Allocator) !void {
+fn selectFile(io: Io, gpa: std.mem.Allocator) ![]u8 {
     const cwd = std.Io.Dir.cwd();
-    const dir = cwd.openDir(io, "sequences", .{ .iterate = true }) catch {
+    const dir = cwd.openDir(io, folder, .{ .iterate = true }) catch {
         return CommandError.Internal;
     };
     var it = dir.iterate();
@@ -218,12 +221,13 @@ fn selectFile(io: Io, gpa: std.mem.Allocator) !void {
 
     var it2 = dir.iterate();
     idx = 1;
-
+    var selected_file: []u8 = undefined;
     while (try it2.next(io)) |entry| : (idx+=1) {
         std.debug.print("{d}: {s}\n", .{idx, entry.name});
         if (file_number == idx) {
-            const selected_file = try gpa.dupe(u8, entry.name);
+            selected_file = try gpa.dupe(u8, entry.name);
             std.debug.print("Selected file: {s}\n", .{selected_file});
         }
     }
+    return selected_file;
 }
